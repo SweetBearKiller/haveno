@@ -37,6 +37,7 @@ import haveno.desktop.main.portfolio.pendingtrades.PendingTradesView;
 import javafx.beans.value.ChangeListener;
 import javafx.collections.ListChangeListener;
 import javafx.fxml.FXML;
+import javafx.scene.control.ScrollPane;
 import javafx.scene.control.Tab;
 import javafx.scene.control.TabPane;
 
@@ -232,7 +233,12 @@ public class PortfolioView extends ActivatableView<TabPane, Void> {
             }
         }
 
-        currentTab.setContent(view.getRoot());
+        if (currentTab.getContent() != null && currentTab.getContent() instanceof ScrollPane) {
+            ((ScrollPane) currentTab.getContent()).setContent(view.getRoot());
+        } else {
+            currentTab.setContent(view.getRoot());
+        }
+        
         root.getSelectionModel().select(currentTab);
     }
 
