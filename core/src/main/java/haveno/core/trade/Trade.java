@@ -587,8 +587,10 @@ public abstract class Trade implements Tradable, Model {
                 getArbitrator().setPubKeyRing(arbitrator.getPubKeyRing());
             });
 
-            // listen to daemon connection
-            xmrWalletService.getConnectionsService().addConnectionListener(newConnection -> onConnectionChanged(newConnection));
+            // handle daemon changes with max parallelization
+            xmrWalletService.getConnectionsService().addConnectionListener(newConnection -> {
+                HavenoUtils.submitTask(() -> onConnectionChanged(newConnection));
+            });
 
             // check if done
             if (isPayoutUnlocked()) {
@@ -1857,7 +1859,7 @@ public abstract class Trade implements Tradable, Model {
                 if (isDepositsUnlocked() && !isPayoutPublished()) wallet.rescanSpent();
 
                 // get txs from trade wallet
-                boolean payoutExpected = isPaymentReceived() || processModel.getPaymentReceivedMessage() != null || disputeState.ordinal() > DisputeState.ARBITRATOR_SENT_DISPUTE_CLOSED_MSG.ordinal() || processModel.getDisputeClosedMessage() != null;
+                boolean payoutExpected = isPaymentReceived() || getSeller().getPaymentReceivedMessage() != null || disputeState.ordinal() >= DisputeState.ARBITRATOR_SENT_DISPUTE_CLOSED_MSG.ordinal() || getArbitrator().getDisputeClosedMessage() != null;
                 boolean checkPool = !isDepositsConfirmed() || (!isPayoutConfirmed() && payoutExpected);
                 MoneroTxQuery query = new MoneroTxQuery().setIncludeOutputs(true);
                 if (!checkPool) query.setInTxPool(false); // avoid pool check if possible

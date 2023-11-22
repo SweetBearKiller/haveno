@@ -109,7 +109,7 @@ public abstract class TradeProtocol implements DecryptedDirectMessageListener, D
 
     protected void onTradeMessage(TradeMessage message, NodeAddress peerNodeAddress) {
         log.info("Received {} as TradeMessage from {} with tradeId {} and uid {}", message.getClass().getSimpleName(), peerNodeAddress, message.getTradeId(), message.getUid());
-        handle(message, peerNodeAddress);
+        new Thread(() -> handle(message, peerNodeAddress)).start();
     }
 
     protected void onMailboxMessage(TradeMessage message, NodeAddress peerNodeAddress) {
@@ -118,15 +118,13 @@ public abstract class TradeProtocol implements DecryptedDirectMessageListener, D
     }
 
     private void handle(TradeMessage message, NodeAddress peerNodeAddress) {
-        new Thread(() -> {
-            if (message instanceof DepositsConfirmedMessage) {
-                handle((DepositsConfirmedMessage) message, peerNodeAddress);
-            } else if (message instanceof PaymentSentMessage) {
-                handle((PaymentSentMessage) message, peerNodeAddress);
-            } else if (message instanceof PaymentReceivedMessage) {
-                handle((PaymentReceivedMessage) message, peerNodeAddress);
-            }
-        }).start();
+        if (message instanceof DepositsConfirmedMessage) {
+            handle((DepositsConfirmedMessage) message, peerNodeAddress);
+        } else if (message instanceof PaymentSentMessage) {
+            handle((PaymentSentMessage) message, peerNodeAddress);
+        } else if (message instanceof PaymentReceivedMessage) {
+            handle((PaymentReceivedMessage) message, peerNodeAddress);
+        }
     }
 
     @Override
@@ -274,12 +272,12 @@ public abstract class TradeProtocol implements DecryptedDirectMessageListener, D
         synchronized (trade) {
 
             // skip if no need to reprocess
-            if (trade.isSeller() || trade.getProcessModel().getPaymentReceivedMessage() == null || trade.getState().ordinal() >= Trade.State.SELLER_SENT_PAYMENT_RECEIVED_MSG.ordinal()) {
+            if (trade.isSeller() || trade.getSeller().getPaymentReceivedMessage() == null || trade.getState().ordinal() >= Trade.State.SELLER_SENT_PAYMENT_RECEIVED_MSG.ordinal()) {
                 return;
             }
 
             log.warn("Reprocessing payment received message for {} {}", trade.getClass().getSimpleName(), trade.getId());
-            new Thread(() -> handle(trade.getProcessModel().getPaymentReceivedMessage(), trade.getProcessModel().getPaymentReceivedMessage().getSenderNodeAddress(), reprocessOnError)).start();
+            new Thread(() -> handle(trade.getSeller().getPaymentReceivedMessage(), trade.getSeller().getPaymentReceivedMessage().getSenderNodeAddress(), reprocessOnError)).start();
         }
     }
 
@@ -523,7 +521,6 @@ public abstract class TradeProtocol implements DecryptedDirectMessageListener, D
             Validator.checkTradeId(processModel.getOfferId(), message);
             processModel.setTradeMessage(message);
 
-
             // check minimum trade phase
             if (trade.isBuyer() && trade.getPhase().ordinal() < Trade.Phase.PAYMENT_SENT.ordinal()) {
                 log.warn("Received PaymentReceivedMessage before payment sent for {} {}, ignoring", trade.getClass().getSimpleName(), trade.getId());
@@ -552,7 +549,7 @@ public abstract class TradeProtocol implements DecryptedDirectMessageListener, D
                             processModel.getTradeManager().requestPersistence();
 
                             // schedule to reprocess message unless deleted
-                            if (trade.getProcessModel().getPaymentReceivedMessage() != null) {
+                            if (trade.getSeller().getPaymentReceivedMessage() != null) {
                                 UserThread.runAfter(() -> {
                                     reprocessPaymentReceivedMessageCount++;
                                     maybeReprocessPaymentReceivedMessage(reprocessOnError);
